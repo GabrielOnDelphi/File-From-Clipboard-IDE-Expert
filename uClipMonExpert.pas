@@ -99,7 +99,7 @@ var
   Lines: TStringList;
   I: Integer;
 begin
-  // showmessage('Entered ProcessClipboard'); // DEBUG
+  //showmessage('Entered ProcessClipboard'); // DEBUG
 
   if not Clipboard.HasFormat(CF_TEXT) then Exit;
   try
@@ -323,18 +323,30 @@ begin
 end;
 
 
+function AppDataFolder(AppName: string; ForceDir: Boolean = FALSE): string;
+begin
+  Assert(AppName > '', 'AppName is empty!');
+  Assert(System.IOUtils.TPath.HasValidFileNameChars(AppName, FALSE), 'Invalid chars in AppName: '+ AppName);
+
+  Result := IncludeTrailingPathDelimiter(TPath.Combine(TPath.GetHomePath, AppName));
+
+  if ForceDir
+  then ForceDirectories(Result);
+end;
+
+
 procedure TFileFromClipboard.LoadSettings;
 var
   Ini: TIniFile;
   IniPath: string;
 begin
-  IniPath := ExtractFilePath(ParamStr(0)) + 'ClipboardFileOpener.ini';
+  IniPath := AppDataFolder('GabrielM_FileFromClipboard', TRUE) + 'FileFromClipboard.ini';
   if not TFile.Exists(IniPath) then
   begin
     Ini := TIniFile.Create(IniPath);
     try
-      Ini.WriteString('Settings', 'SearchPath', 'C:\MyProjects\');
-      Ini.WriteString('Settings', 'ExcludeFolders', 'bin;.git;win32;win64;c:\MyProjects\3rdParty\');
+      Ini.WriteString('Settings', 'SearchPath', 'C:\Projects\');
+      Ini.WriteString('Settings', 'ExcludeFolders', 'bin;.git;win32;win64;c:\Projects\3rdParty\');
     finally
       Ini.Free;
     end;

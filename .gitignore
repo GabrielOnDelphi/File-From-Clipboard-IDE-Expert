@@ -2,3 +2,6 @@
 /37.0
 /__history
 /Version that I tried to split
+*.dsv
+*.res
+*.local

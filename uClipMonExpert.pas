@@ -311,49 +311,6 @@ begin
   end;
 end;
 
-{del
-procedure TFileFromClipboard.OpenFileInIDE(const FullPath: string);
-var
-  Module: IOTAModule;
-  ActionServices: IOTAActionServices;
-  ModuleServices: IOTAModuleServices;
-begin
-  Log('Expert.OpenFileInIDE: '+ FullPath);
-  if BorlandIDEServices = nil then
-    begin
-      ShowMessage('BorlandIDEServices not supported!');
-      Exit;
-    end;
-
-  if not Supports(BorlandIDEServices, IOTAActionServices, ActionServices) then
-    begin
-      ShowMessage('IOTAActionServices module not supported!');
-      Exit;
-    end;
-
-  // Open the file
-  if not ActionServices.OpenFile(FullPath) then
-    begin
-      ShowMessage('Failed to open file in IDE: ' + FullPath);
-      Exit;
-    end;
-
-  // Bring the editor to front
-  if Supports(BorlandIDEServices, IOTAModuleServices, ModuleServices) then
-    begin
-      Module:= ModuleServices.FindModule(FullPath);
-      if Assigned(Module)
-      then
-        begin
-          Module.Show;
-          Log('Success.');
-        end
-      else ShowMessage('Error finding module after opening file: ' + FullPath);
-    end;
-end;   }
-
-
-
 
 
 
@@ -448,12 +405,12 @@ begin
   Ini:= TIniFile.Create(IniPath);
   try
     // Search folder
-    SearchPath:= Ini.ReadString('ExpertSettings', 'SearchPath', 'C:\Source\');
+    SearchPath:= Ini.ReadString('ExpertSettings', 'SearchPath', 'C:\Projects\');
     SearchPath:= IncludeTrailingPathDelimiter(SearchPath);
 
     // Excluded folders
     ExcludeFolders.Clear;
-    ExcludeFolders.DelimitedText:= Ini.ReadString('ExpertSettings', 'ExcludeFolders', 'External;C:\MyProjects\3rd_party');
+    ExcludeFolders.DelimitedText:= Ini.ReadString('ExpertSettings', 'ExcludeFolders', 'External;C:\Projects\3rd_party');
 
     // Plugin
     Enabled  := Ini.ReadBool('ExpertSettings', 'Enabled', True);

@@ -37,8 +37,7 @@ requires
 contains
   uClipMonExpert in 'uClipMonExpert.pas',
   uClipMonForm in 'uClipMonForm.pas' {ClipMonFrm},
-  uUtils in 'uUtils.pas',
-  uOpenFileIDE in '..\..\LightSaber\IDE Experts\uOpenFileIDE.pas';
+  uUtils in 'uUtils.pas';
 
 end.
 

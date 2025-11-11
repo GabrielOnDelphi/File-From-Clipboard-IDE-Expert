@@ -49,7 +49,6 @@
         <SanitizedProjectName>Expert_OpenFileFromClipboard</SanitizedProjectName>
         <DCC_Alignment>1</DCC_Alignment>
         <DCC_DUPLICATE_CTOR_DTOR>false</DCC_DUPLICATE_CTOR_DTOR>
-        <DCC_DcpOutput>c:\source\BPLs\</DCC_DcpOutput>
         <DCC_DcuOutput>.\$(ProductVersion)\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_Description>Open File From Clipboard</DCC_Description>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
@@ -59,8 +58,7 @@
         <GenDll>true</GenDll>
         <GenPackage>true</GenPackage>
         <VerInfo_Keys>FileVersion=1.0.0.0</VerInfo_Keys>
-        <DCC_BplOutput>c:\source\BPLs\</DCC_BplOutput>
-        <DCC_UnitSearchPath>c:\Projects\Packages\LightSaber\;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>c:\Projects\LightSaber\IDE Experts\;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_Locale>1031</VerInfo_Locale>
         <DesignOnlyPackage>true</DesignOnlyPackage>
     </PropertyGroup>
@@ -108,7 +106,6 @@
             <Form>ClipMonFrm</Form>
         </DCCReference>
         <DCCReference Include="uUtils.pas"/>
-        <DCCReference Include="..\..\LightSaber\IDE Experts\uOpenFileIDE.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

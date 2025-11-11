@@ -14,7 +14,8 @@ INTERFACE
 USES
   Winapi.Windows, System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.Types,
   Vcl.Dialogs, Vcl.Clipbrd, Vcl.Menus, Vcl.Forms,
-  ToolsAPI, uOpenFileIDE;
+  ToolsAPI,
+  uOpenFileIDE {this file can be found here: Github.com/GabrielOnDelphi/Delphi-LightSaber/tree/main/IDE%20Experts };
 
 TYPE
   TFileFromClipboard = class(TInterfacedObject, IOTAWizard, IOTAIDENotifier)

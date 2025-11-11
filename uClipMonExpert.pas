@@ -13,26 +13,32 @@ INTERFACE
 
 USES
   Winapi.Windows, System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.Types,
-  Vcl.Dialogs, Vcl.Clipbrd,
-  ToolsAPI, uClipMonForm;
+  Vcl.Dialogs, Vcl.Clipbrd, Vcl.Menus, Vcl.Forms,
+  ToolsAPI, uOpenFileIDE;
 
 TYPE
   TFileFromClipboard = class(TInterfacedObject, IOTAWizard, IOTAIDENotifier)
   private
     FLastClipboardText: string;
-    FSearchPath: string;
-    FExcludeFolders: TStringList;
     FNotifierIndex: Integer;
-    FMonitorForm: TClipMonFrm; // Reference to the hidden form
+    FMenuItem: TMenuItem;
     procedure LoadSettings;
     function  TryExtractUnitName(const Path: string): string;
-    function  IsDelphiFile(const FileName: string): Boolean;
     function  SearchFileInPath(const FileName: string): string;
-    procedure OpenFileInIDE(const FullPath: string);
-    procedure ProcessClipboard;
+    function  IsFileExcluded(const FullPath: string): Boolean;
+    procedure Log(const Msg: string);
   public
+    MonitorForm: TObject; // TClipMonFrm; // Reference to the hidden clipboard monitor form.
+    // Settings
+    Enabled: Boolean;
+    LogActive: Boolean;
+    ExcludeFolders: TStringList;
+    SearchPath: string;
     constructor Create;
     destructor Destroy; override;
+    procedure ProcessClipboard; // Called by TClipMonFrm.WMClipboardUpdate
+    procedure ShowPluginOptions(Sender: TObject);
+    procedure SaveSettings;
     // IOTAWizard
     function GetIDString: string;
     function GetName: string;
@@ -51,22 +57,54 @@ TYPE
 
 procedure Register;
 
-implementation
+IMPLEMENTATION
+USES uUtils, uClipMonForm;
 
 
 {-------------------------------------------------------------------------------------------------------------
    CTOR
 -------------------------------------------------------------------------------------------------------------}
+procedure TFileFromClipboard.Log(const Msg: string);
+begin
+  if Assigned(MonitorForm)
+  and LogActive
+  then (MonitorForm as TClipMonFrm).Log.Lines.Add(Msg);
+end;
+
+
 constructor TFileFromClipboard.Create;
+var NTAServices: INTAServices;
 begin
   inherited Create;
-  FExcludeFolders := TStringList.Create;
-  FExcludeFolders.Delimiter := ';';
-  FNotifierIndex := -1;
+
+  ExcludeFolders:= TStringList.Create;
+  ExcludeFolders.Delimiter:= ';';   // necessary for DelimitedText only, not for CommaText
+  FNotifierIndex:= -1;
+  FMenuItem:= nil;
+  Enabled:= True;
+
+  Log('Expert.Constructor');
   LoadSettings;
 
   // Create the dedicated hidden form. Pass a reference to ProcessClipboard as the callback TProc
-  FMonitorForm := TClipMonFrm.Create(nil, ProcessClipboard); // Freed by: Destroy
+  if Assigned(MonitorForm) then MonitorForm.Free;
+  MonitorForm:= TClipMonFrm.Create(nil, Self); // Freed by: Destroy
+  //(MonitorForm as TClipMonFrm).Show;
+
+  // Add the menu item, using the Wizard object as the owner.
+  if Supports(BorlandIDEServices, INTAServices, NTAServices) then
+  begin
+    // The wizard (which is an IOTAWizard) is the owner.
+    FMenuItem := TMenuItem.Create(Application);
+    FMenuItem.Caption := 'File From Clipboard';
+
+    // The handler is an instance method of TFormSettings, which handles its own creation/destruction.
+    FMenuItem.OnClick := ShowPluginOptions;
+
+    // 'ToolsMenu' is the correct name for the top-level Tools menu.
+    // The menu is now owned by the expert class and will be cleaned up in its destructor.
+    NTAServices.AddActionMenu('ToolsMenu', nil, FMenuItem);
+  end;
 
   // Initial check
   ProcessClipboard;
@@ -75,10 +113,12 @@ end;
 
 destructor TFileFromClipboard.Destroy;
 begin
-  // The TClipMonFrm destructor handles calling RemoveClipboardFormatListener(Handle)
-  if Assigned(FMonitorForm) then FMonitorForm.Free;
+  SaveSettings;
 
-  FExcludeFolders.Free;
+  FreeAndNil(MonitorForm);          // The TClipMonFrm destructor handles calling RemoveClipboardFormatListener(Handle)
+  FreeAndNil(FMenuItem);            // Release the menu item. The IDE services might handle this, but it's safer to attempt to free it.
+  FreeAndNil(ExcludeFolders);
+
   inherited;
 end;
 
@@ -99,16 +139,29 @@ var
   Lines: TStringList;
   I: Integer;
 begin
-  //showmessage('Entered ProcessClipboard'); // DEBUG
+  if not Enabled then
+    begin
+      Log('Expert disabled!');
+      Exit;
+    end;
 
-  if not Clipboard.HasFormat(CF_TEXT) then Exit;
+  Log('');
+  if not Clipboard.HasFormat(CF_TEXT) then
+    begin
+      Log('The clipboard is not text!');
+      Exit;
+    end;
   try
     ClipboardText := Clipboard.AsText;
   except
     on E: EClipboardException do
-      Exit; // Silently handle access denied or other clipboard errors like "Cannot open clipboard: Access is denied"
+      begin
+        Log('Expert.EClipboardException!');
+        Exit;                          // Silently handle access denied or other clipboard errors like "Cannot open clipboard: Access is denied"
+      end;
   end;
 
+  Log('First 512 chars in clipboard: '+ Copy(ClipboardText, 1, 512));
   if ClipboardText = FLastClipboardText then Exit;
   FLastClipboardText := ClipboardText;
 
@@ -121,15 +174,26 @@ begin
       if Line = '' then Continue;
 
       // Replace / with \ to handle Linux-style paths
-      Line := StringReplace(Line, '/', '\', [rfReplaceAll]);    //Some platforms (like sonarcube) uses "Linux" paths, which will give this error: "Invalid characters in search pattern". Example:  MyProjects/Vcl.MyFile.pas
+      Line:= StringReplace(Line, '/', '\', [rfReplaceAll]);    //Some platforms (like sonarcube) uses "Linux" paths, which will give this error: "Invalid characters in search pattern". Example:  MyProjects/Vcl.MyFile.pas
 
       // Handle full paths or unit names (e.g., c:\path\file.pas or MyBase.MyUnit.pas)
-      UnitName := TryExtractUnitName(Line);
-      FileName := ExtractFileName(UnitName);
+      UnitName:= TryExtractUnitName(Line);
+      FileName:= ExtractFileName(UnitName);
+      Log('Expert.ProcessClipboard.UnitName: '+ UnitName);
 
-      if not IsDelphiFile(FileName) then Continue;
+      if not IsDelphiFile(FileName) then
+        begin
+          Log('Not a Dephi file: '+ FileName);
+          Continue;
+        end;
 
-      // Find the file path
+      // Check for exclusion before opening
+      if IsFileExcluded(FullPath) then
+        begin
+          Continue; // Skip this path and go to the next line in the clipboard
+        end;
+
+      // Restore full file name
       if TFile.Exists(Line)
       then FullPath := Line
       else FullPath := SearchFileInPath(FileName);
@@ -140,7 +204,9 @@ begin
         TThread.Queue(nil,
           procedure
           begin
-            OpenFileInIDE(FullPath);
+            VAR IDEPosition: RIDEPosition;
+            IDEPosition.default(FullPath);
+            OpenInIDEEditor(IDEPosition);
           end);
 
         Break; // Found the file, break the loop
@@ -157,8 +223,8 @@ function TFileFromClipboard.TryExtractUnitName(const Path: string): string;
 var
   DotPos: Integer;
 begin
-  Result := Trim(Path);
-  DotPos := LastDelimiter('.', Result);  // Look for the last dot before the extension
+  Result:= Trim(Path);
+  DotPos:= LastDelimiter('.', Result);  // Look for the last dot before the extension
 
   // Check if there is an extension (e.g., .pas)
   if DotPos > 0
@@ -184,6 +250,32 @@ begin
 end;
 
 
+// Centralized logic for checking if a file path is excluded.
+function TFileFromClipboard.IsFileExcluded(const FullPath: string): Boolean;
+var
+  ExcludePath2: string;
+begin
+  if FullPath = '' then Exit(False);
+
+  // Check against exclude folders
+  for var ExcludePath in ExcludeFolders do
+    begin
+      if ExcludePath = '' then Continue;
+
+      // Ensure the exclusion path is lower-cased and has a trailing path delimiter
+      // for accurate subfolder matching (e.g., 'c:\tools' must match 'c:\tools\subfolder').
+      ExcludePath2:= LowerCase(IncludeTrailingPathDelimiter(ExcludePath));
+
+      if Pos(ExcludePath2, LowerCase(FullPath)) > 0 then
+      begin
+        Log('Path excluded! ExcludePath: '+ExcludePath2+ #13 + 'Input file: '+ FullPath);
+        Exit(True);
+      end;
+    end;
+
+  Result:= FALSE;
+end;
+
 
 { Here we check if the file in present in our searched folder }
 function TFileFromClipboard.SearchFileInPath(const FileName: string): string;
@@ -191,43 +283,42 @@ var
   Files: TStringDynArray;
   I: Integer;
   FullPath: string;
-  Excluded: Boolean;
 begin
   Result := '';
-  if not TDirectory.Exists(FSearchPath) then Exit;
+  Log('SearchFileInPath: '+ FileName);
+
+  if not TDirectory.Exists(SearchPath) then
+    begin
+      Log('"Search folder" not found!');
+      Exit;
+    end;
 
   // Search the our path for the FileName
   try
-    Files := TDirectory.GetFiles(FSearchPath, FileName, TSearchOption.soAllDirectories);
+    Files := TDirectory.GetFiles(SearchPath, FileName, TSearchOption.soAllDirectories);
   except
+    ShowMessage('SearchFileInPath exception');
     Exit; // Hide exceptions like "Invalid characters in search pattern"
   end;
 
   for I := 0 to High(Files) do
   begin
-    FullPath := Files[I];
-    Excluded := False;
+    FullPath:= Files[I];
 
-    // Check against exclude folders
-    for var ExcludePath in FExcludeFolders do
-      if Pos(LowerCase(IncludeTrailingPathDelimiter(ExcludePath)), LowerCase(FullPath)) > 0 then
-      begin
-        Excluded := True;
-        Break;
-      end;
-
-    if not Excluded
+    if not IsFileExcluded(FullPath)
     then Exit(FullPath);
+    // If excluded, loop to the next file found
   end;
 end;
 
-
+{del
 procedure TFileFromClipboard.OpenFileInIDE(const FullPath: string);
 var
   Module: IOTAModule;
   ActionServices: IOTAActionServices;
   ModuleServices: IOTAModuleServices;
 begin
+  Log('Expert.OpenFileInIDE: '+ FullPath);
   if BorlandIDEServices = nil then
     begin
       ShowMessage('BorlandIDEServices not supported!');
@@ -252,11 +343,14 @@ begin
     begin
       Module:= ModuleServices.FindModule(FullPath);
       if Assigned(Module)
-      then Module.Show
+      then
+        begin
+          Module.Show;
+          Log('Success.');
+        end
       else ShowMessage('Error finding module after opening file: ' + FullPath);
     end;
-end;
-
+end;   }
 
 
 
@@ -265,17 +359,17 @@ end;
 
 function TFileFromClipboard.GetIDString: string;
 begin
-  Result := 'FileFromClipboard.GabrielMoraru';
+  Result:= 'FileFromClipboard.GabrielMoraru';
 end;
 
 function TFileFromClipboard.GetName: string;
 begin
-  Result := 'File From Clipboard - GabrielMoraru.com';
+  Result:= 'File From Clipboard - GabrielMoraru.com';
 end;
 
 function TFileFromClipboard.GetState: TWizardState;
 begin
-  Result := [wsEnabled];
+  Result:= [wsEnabled];  //todo: use this instead of Enabled!
 end;
 
 procedure TFileFromClipboard.AfterSave;
@@ -314,7 +408,7 @@ end;
 {-------------------------------------------------------------------------------------------------------------
    UTILS / SETTINGS
 -------------------------------------------------------------------------------------------------------------}
-function TFileFromClipboard.IsDelphiFile(const FileName: string): Boolean;
+function IsDelphiFile(const FileName: string): Boolean;
 var Ext: string;
 begin
   Ext := LowerCase(ExtractFileExt(FileName));
@@ -335,28 +429,54 @@ begin
 end;
 
 
+function GetIniPath: string;
+begin
+  Result:= AppDataFolder('FileFromClipboard', TRUE) + 'FileFromClipboard.ini';
+end;
+
+
+
+
+{ INI file is located in c:\Users\USERNAME\AppData\Roaming\FileFromClipboard\FileFromClipboard.ini }
 procedure TFileFromClipboard.LoadSettings;
 var
   Ini: TIniFile;
   IniPath: string;
 begin
-  IniPath := AppDataFolder('GabrielM_FileFromClipboard', TRUE) + 'FileFromClipboard.ini';
-  if not TFile.Exists(IniPath) then
-  begin
-    Ini := TIniFile.Create(IniPath);
-    try
-      Ini.WriteString('Settings', 'SearchPath', 'C:\Projects\');
-      Ini.WriteString('Settings', 'ExcludeFolders', 'bin;.git;win32;win64;c:\Projects\3rdParty\');
-    finally
-      Ini.Free;
-    end;
-  end;
-
-  Ini := TIniFile.Create(IniPath);
+  IniPath:= GetIniPath;
+  Log('Expert.LoadSettings');
+  Ini:= TIniFile.Create(IniPath);
   try
-    FSearchPath := Ini.ReadString('Settings', 'SearchPath', 'C:\MyProjects\');
-    FSearchPath := IncludeTrailingPathDelimiter(FSearchPath);
-    FExcludeFolders.DelimitedText := Ini.ReadString('Settings', 'ExcludeFolders', '');
+    // Search folder
+    SearchPath:= Ini.ReadString('ExpertSettings', 'SearchPath', 'C:\Source\');
+    SearchPath:= IncludeTrailingPathDelimiter(SearchPath);
+
+    // Excluded folders
+    ExcludeFolders.Clear;
+    ExcludeFolders.DelimitedText:= Ini.ReadString('ExpertSettings', 'ExcludeFolders', 'External;C:\MyProjects\3rd_party');
+
+    // Plugin
+    Enabled  := Ini.ReadBool('ExpertSettings', 'Enabled', True);
+    LogActive:= Ini.ReadBool('ExpertSettings', 'LogActive', False);
+  finally
+    Ini.Free;
+  end;
+end;
+
+
+procedure TFileFromClipboard.SaveSettings;
+var
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath:= GetIniPath;
+  Log('Expert.SaveSettings - IniPath: '+ IniPath);
+  Ini:= TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('ExpertSettings', 'SearchPath', SearchPath);
+    Ini.WriteString('ExpertSettings', 'ExcludeFolders', ExcludeFolders.DelimitedText);
+    Ini.WriteBool  ('ExpertSettings', 'Enabled', Enabled);
+    Ini.WriteBool  ('ExpertSettings', 'LogActive', LogActive);
   finally
     Ini.Free;
   end;
@@ -364,10 +484,20 @@ end;
 
 
 
+// Show form
+procedure TFileFromClipboard.ShowPluginOptions(Sender: TObject);
+begin
+  // if not Assigned(FormSettings) then FormSettings:= TFormSettings.Create(Application, Self);
+  (MonitorForm as TClipMonFrm).Show;
+end;
+
 
 procedure Register;
 begin
-  RegisterPackageWizard(TFileFromClipboard.Create as IOTAWizard);
+  var Wizard:= TFileFromClipboard.Create;
+  RegisterPackageWizard(Wizard as IOTAWizard);
 end;
 
+
 end.
+

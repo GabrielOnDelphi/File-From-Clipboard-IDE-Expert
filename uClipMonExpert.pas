@@ -28,12 +28,13 @@ TYPE
     function  IsFileExcluded(const FullPath: string): Boolean;
     procedure Log(const Msg: string);
   public
-    MonitorForm: TObject; // TClipMonFrm; // Reference to the hidden clipboard monitor form.
+    MonitorForm: TObject; // TClipMonFrm - Reference to the hidden clipboard monitor form.
     // Settings
     Enabled: Boolean;
     LogActive: Boolean;
     ExcludeFolders: TStringList;
     SearchPath: string;
+    DontOpenTwice: Boolean;
     constructor Create;
     destructor Destroy; override;
     procedure ProcessClipboard; // Called by TClipMonFrm.WMClipboardUpdate
@@ -82,13 +83,14 @@ begin
   FNotifierIndex:= -1;
   FMenuItem:= nil;
   Enabled:= True;
+  DontOpenTwice:= FALSE;
 
-  Log('Expert.Constructor');
   LoadSettings;
 
   // Create the dedicated hidden form. Pass a reference to ProcessClipboard as the callback TProc
   if Assigned(MonitorForm) then MonitorForm.Free;
   MonitorForm:= TClipMonFrm.Create(nil, Self); // Freed by: Destroy
+  Log('Expert.Constructor');
   //(MonitorForm as TClipMonFrm).Show;
 
   // Add the menu item, using the Wizard object as the owner.
@@ -139,14 +141,15 @@ var
   Lines: TStringList;
   I: Integer;
 begin
-  if not Enabled then
+  if NOT Enabled then
     begin
       Log('Expert disabled!');
       Exit;
     end;
 
+  // Read clipboard
   Log('');
-  if not Clipboard.HasFormat(CF_TEXT) then
+  if NOT Clipboard.HasFormat(CF_TEXT) then
     begin
       Log('The clipboard is not text!');
       Exit;
@@ -160,18 +163,25 @@ begin
         Exit;                          // Silently handle access denied or other clipboard errors like "Cannot open clipboard: Access is denied"
       end;
   end;
-
   Log('First 512 chars in clipboard: '+ Copy(ClipboardText, 1, 512));
-  if ClipboardText = FLastClipboardText then Exit;
-  FLastClipboardText := ClipboardText;
+
+  // Don't open twice
+  if DontOpenTwice then
+    if ClipboardText = FLastClipboardText then Exit;
+  FLastClipboardText:= ClipboardText;
 
   Lines:= TStringList.Create;
   try
-    Lines.Text := ClipboardText;
-    for I := 0 to Lines.Count - 1 do
+    Lines.Text:= ClipboardText;
+    for i:= 0 to Lines.Count - 1 do
     begin
-      Line := Trim(Lines[I]);
+      Line:= Trim(Lines[I]);
       if Line = '' then Continue;
+      if Pos('.', Line) < 1 then
+      begin
+        Log('Text in clipbboard: Not a file.');
+        Continue;
+      end;
 
       // Replace / with \ to handle Linux-style paths
       Line:= StringReplace(Line, '/', '\', [rfReplaceAll]);    //Some platforms (like sonarcube) uses "Linux" paths, which will give this error: "Invalid characters in search pattern". Example:  MyProjects/Vcl.MyFile.pas
@@ -181,9 +191,9 @@ begin
       FileName:= ExtractFileName(UnitName);
       Log('Expert.ProcessClipboard.UnitName: '+ UnitName);
 
-      if not IsDelphiFile(FileName) then
+      if NOT IsDelphiFile(FileName) then
         begin
-          Log('Not a Dephi file: '+ FileName);
+          Log('Text in clipbboard: Not a Dephi file: '+ FileName);
           Continue;
         end;
 

@@ -3,7 +3,8 @@ object ClipMonFrm: TClipMonFrm
   Top = 0
   AlphaBlend = True
   AlphaBlendValue = 240
-  BorderStyle = bsDialog
+  BorderIcons = [biSystemMenu, biMinimize]
+  BorderStyle = bsSingle
   Caption = 'Monitor'
   ClientHeight = 243
   ClientWidth = 384
@@ -28,8 +29,6 @@ object ClipMonFrm: TClipMonFrm
     Align = alBottom
     BevelOuter = bvNone
     TabOrder = 0
-    ExplicitTop = 285
-    ExplicitWidth = 468
     DesignSize = (
       384
       33)
@@ -44,7 +43,6 @@ object ClipMonFrm: TClipMonFrm
       ModalResult = 1
       TabOrder = 0
       OnClick = btnApplyClick
-      ExplicitLeft = 300
     end
     object btnCancel: TButton
       Left = 303
@@ -57,7 +55,6 @@ object ClipMonFrm: TClipMonFrm
       ModalResult = 2
       TabOrder = 1
       OnClick = btnCancelClick
-      ExplicitLeft = 387
     end
   end
   object PageControl1: TPageControl
@@ -68,8 +65,6 @@ object ClipMonFrm: TClipMonFrm
     ActivePage = TabSheet1
     Align = alClient
     TabOrder = 1
-    ExplicitWidth = 468
-    ExplicitHeight = 281
     object TabSheet1: TTabSheet
       Caption = 'Log'
       object Log: TMemo
@@ -82,8 +77,6 @@ object ClipMonFrm: TClipMonFrm
         ScrollBars = ssVertical
         TabOrder = 0
         WordWrap = False
-        ExplicitWidth = 454
-        ExplicitHeight = 245
       end
     end
     object TabSheet2: TTabSheet

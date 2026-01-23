@@ -60,7 +60,7 @@ TYPE
 procedure Register;
 
 IMPLEMENTATION
-USES uUtils, uClipMonForm;
+USES uUtils, uClipMonForm, uClipboardListener;
 
 
 {-------------------------------------------------------------------------------------------------------------
@@ -68,15 +68,15 @@ USES uUtils, uClipMonForm;
 -------------------------------------------------------------------------------------------------------------}
 procedure TFileFromClipboard.Log(const Msg: string);
 begin
-  if Assigned(MonitorForm)
-  and LogActive
-  then (MonitorForm as TClipMonFrm).Log.Lines.Add(Msg);
+  if LogActive and Assigned(MonitorForm) then
+    (MonitorForm as TClipMonFrm).Log.Lines.Add(Msg);
 end;
 
 
 constructor TFileFromClipboard.Create;
 var NTAServices: INTAServices;
 begin
+  DebugLog('=== TFileFromClipboard.Create START ===');
   inherited Create;
 
   ExcludeFolders:= TStringList.Create;
@@ -88,9 +88,15 @@ begin
 
   LoadSettings;
 
-  // Create the dedicated hidden form. Pass a reference to ProcessClipboard as the callback TProc
-  if Assigned(MonitorForm) then MonitorForm.Free;
-  MonitorForm:= TClipMonFrm.Create(nil, Self); // Freed by: Destroy
+  // Initialize clipboard listener (must be done before form creation)
+  DebugLog('TFileFromClipboard.Create: Initializing clipboard listener');
+  InitClipboardListener(Self);
+
+  // Use the singleton form for settings UI
+  DebugLog('TFileFromClipboard.Create: Getting singleton ClipMonForm');
+  MonitorForm := ClipMonForm;
+  (MonitorForm as TClipMonFrm).SetExpert(Self);
+  DebugLog('TFileFromClipboard.Create: ClipMonForm configured');
   Log('Expert.Constructor');
   //(MonitorForm as TClipMonFrm).Show;
 
@@ -111,16 +117,21 @@ begin
 
   // Initial check
   ProcessClipboard;
+  DebugLog('=== TFileFromClipboard.Create END ===');
 end;
 
 
 destructor TFileFromClipboard.Destroy;
 begin
+  DebugLog('TFileFromClipboard.Destroy: START');
   SaveSettings;
 
-  FreeAndNil(MonitorForm);          // The TClipMonFrm destructor handles calling RemoveClipboardFormatListener(Handle)
+  // Do NOT free MonitorForm - it's a singleton that must persist for IDE lifetime
+  // The form will be freed in the finalization section
+  MonitorForm := nil;
   FreeAndNil(FMenuItem);            // Release the menu item. The IDE services might handle this, but it's safer to attempt to free it.
   FreeAndNil(ExcludeFolders);
+  DebugLog('TFileFromClipboard.Destroy: END');
 
   inherited;
 end;
@@ -465,15 +476,17 @@ end;
 // Show form
 procedure TFileFromClipboard.ShowPluginOptions(Sender: TObject);
 begin
-  // if not Assigned(FormSettings) then FormSettings:= TFormSettings.Create(Application, Self);
-  (MonitorForm as TClipMonFrm).Show;
+  ClipMonForm.Show;
 end;
 
 
 procedure Register;
 begin
+  DebugLog('=== Register procedure START ===');
   var Wizard:= TFileFromClipboard.Create;
+  DebugLog('Register: Wizard created, calling RegisterPackageWizard');
   RegisterPackageWizard(Wizard as IOTAWizard);
+  DebugLog('=== Register procedure END ===');
 end;
 
 

@@ -37,7 +37,7 @@ object ClipMonFrm: TClipMonFrm
       Width = 75
       Height = 25
       Anchors = [akTop, akRight]
-      Caption = 'Apply'
+      Caption = 'OK'
       Default = True
       ModalResult = 1
       TabOrder = 0
@@ -51,7 +51,7 @@ object ClipMonFrm: TClipMonFrm
       Hint = 'Close without saving.'
       Anchors = [akTop, akRight]
       Cancel = True
-      Caption = 'Close'
+      Caption = 'Cancel'
       ModalResult = 2
       TabOrder = 1
       OnClick = btnCancelClick

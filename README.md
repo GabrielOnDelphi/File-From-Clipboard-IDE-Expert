@@ -1,7 +1,7 @@
 # File-From-Clipboard IDE Expert
 
 File-From-Clipboard is a small Delphi IDE expert that watches the clipboard for PAS filenames (full or partial paths).   
-When a filename is detected and the file exists inside a user-configured search folder, the expert opens the file in the IDE automatically.  
+When a filename is detected in clipboard and the file exists inside a user-configured search folder, the expert opens the file in the IDE automatically.  
 
 Useful when you browse repositories on GitHub, GitLab or similar services and need to open many files quickly (for example when resolving merges).   
 It also helps when working with SonarQube reports that reference source files.  

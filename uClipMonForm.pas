@@ -1,14 +1,13 @@
-﻿unit uClipMonForm;
+unit uClipMonForm;
 
 {=============================================================================================================
    www.GabrielMoraru.com
    2024
    Github.com/GabrielOnDelphi/Delphi-LightSaber/blob/main/System/Copyright.txt
 --------------------------------------------------------------------------------------------------------------
-   This form is needed in order to receive the WMClipboardUpdate message from the OS.
-   It also acts as a log (for debugging purposes).
-
-   This form is not freed when we close it.
+   Settings form for the File From Clipboard IDE expert.
+   This form is used only for the settings UI, not for clipboard message handling.
+   See uClipboardListener.pas for the clipboard monitoring implementation.
 =============================================================================================================}
 
 INTERFACE
@@ -39,67 +38,65 @@ TYPE
     procedure LoadFormPos;
   protected
     Expert: TFileFromClipboard;
-    procedure WMClipboardUpdate(var Msg: TMessage); message WM_CLIPBOARDUPDATE;
   public
-    constructor Create(AOwner: TComponent; aExpert: TFileFromClipboard); reintroduce;
-    destructor Destroy; override;
+    procedure SetExpert(aExpert: TFileFromClipboard);
   end;
 
+function ClipMonForm: TClipMonFrm;
+
 IMPLEMENTATION {$R *.dfm}
-USES uUtils;
+
+USES
+  uUtils;
+
+var
+  FClipMonForm: TClipMonFrm = nil;
 
 
-constructor TClipMonFrm.Create(AOwner: TComponent; aExpert: TFileFromClipboard);
+function ClipMonForm: TClipMonFrm;
 begin
-  inherited Create(AOwner);
-  Expert:= aExpert;
-  if aExpert = nil then
-    begin
-      ShowMessage('TClipMonFrm.Create - Expert is nil!');
-      Exit;
-    end;
+  if FClipMonForm = nil then
+  begin
+    DebugLog('ClipMonForm: Creating singleton');
+    FClipMonForm := TClipMonFrm.Create(nil);
+  end;
+  Result := FClipMonForm;
+end;
+
+
+procedure TClipMonFrm.SetExpert(aExpert: TFileFromClipboard);
+begin
+  DebugLog('TClipMonFrm.SetExpert');
+  Expert := aExpert;
+  if Expert = nil then Exit;
 
   // Form properties
   Caption := 'Gabriel Moraru - Clipboard Monitor Expert';
-  Visible := False;
   LoadFormPos;
 
-  // Get settings from the expert
-  chkEnable.Checked     := Expert.Enabled;
-  edtSearchPath.Text    := Expert.SearchPath;
-  edtExcluded.Text      := Expert.ExcludeFolders.DelimitedText;
-  chkActivateLog.Checked:= Expert.LogActive;
-
-  // Add clipboard listener using this form's handle
-  Winapi.Windows.AddClipboardFormatListener(Handle);
+  // Load settings from expert
+  chkEnable.Checked      := Expert.Enabled;
+  edtSearchPath.Text     := Expert.SearchPath;
+  edtExcluded.Text       := Expert.ExcludeFolders.DelimitedText;
+  chkActivateLog.Checked := Expert.LogActive;
 end;
 
 
 procedure TClipMonFrm.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
   SaveFormPos;
-  Action:= TCloseAction.caHide;
-  // Pass settings to the expert
-  //btnApplyClick(Sender);
+  Action := TCloseAction.caHide;
 end;
 
 
-destructor TClipMonFrm.Destroy;
-begin
-  SaveFormPos;
-  RemoveClipboardFormatListener(Handle);
-  inherited;
-end;
-
-//todo: force save expert here!
 procedure TClipMonFrm.btnApplyClick(Sender: TObject);
 begin
-  // Pass settings to the expert (it will save these)
-  Expert.Enabled:= chkEnable.Checked;
-  Expert.SearchPath:= edtSearchPath.Text;
-  Expert.ExcludeFolders.DelimitedText:= edtExcluded.Text;
-  Expert.LogActive:= chkActivateLog.Checked;
-  (Expert as TFileFromClipboard).SaveSettings;
+  Expert.Enabled      := chkEnable.Checked;
+  Expert.SearchPath   := edtSearchPath.Text;
+  Expert.ExcludeFolders.DelimitedText := edtExcluded.Text;
+  Expert.LogActive    := chkActivateLog.Checked;
+  Expert.SaveSettings;
+  Close;
 end;
 
 
@@ -109,38 +106,35 @@ begin
 end;
 
 
-procedure TClipMonFrm.WMClipboardUpdate(var Msg: TMessage);
-begin
-  // The message comes in on the main VCL thread, so a TThread.Queue is not strictly necessary here, but we'll use it in the Expert to be safe when accessing IDE services.
-  (Expert as TFileFromClipboard).ProcessClipboard;
-end;
-
-
-
-
 procedure TClipMonFrm.SaveFormPos;
 var Ini: TIniFile;
 begin
-  Ini:= TIniFile.Create(GetIniPath);
+  Ini := TIniFile.Create(GetIniPath);
   try
     Ini.WriteInteger('FrmMonitor', 'Left', Left);
-    Ini.WriteInteger('FrmMonitor', 'Top',  Top);
+    Ini.WriteInteger('FrmMonitor', 'Top', Top);
   finally
     Ini.Free;
   end;
 end;
+
 
 procedure TClipMonFrm.LoadFormPos;
 var Ini: TIniFile;
 begin
-  Ini:= TIniFile.Create(GetIniPath);
+  Ini := TIniFile.Create(GetIniPath);
   try
     Left := Ini.ReadInteger('FrmMonitor', 'Left', 10);
-    Top  := Ini.ReadInteger('FrmMonitor', 'Top',  10);
+    Top  := Ini.ReadInteger('FrmMonitor', 'Top', 10);
   finally
     Ini.Free;
   end;
 end;
 
+
+initialization
+
+finalization
+  FreeAndNil(FClipMonForm);
 
 end.

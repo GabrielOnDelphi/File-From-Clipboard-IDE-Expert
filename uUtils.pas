@@ -63,10 +63,9 @@ begin
   LogPath := AppDataFolder('FileFromClipboard', TRUE) + 'debug.log';
   AssignFile(F, LogPath);
   try
-    if FileExists(LogPath) then
-      Append(F)
-    else
-      Rewrite(F);
+    if FileExists(LogPath)
+    then Append(F)
+    else Rewrite(F);
     try
       WriteLn(F, FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now) + ' | ' + Msg);
     finally

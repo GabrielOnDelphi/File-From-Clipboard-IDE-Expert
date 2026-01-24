@@ -13,8 +13,8 @@ unit uClipMonForm;
 INTERFACE
 
 USES
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, System.IniFiles,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.Mask,
+  Winapi.Windows, System.SysUtils, System.Classes, System.IniFiles,
+  Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls,
   uClipMonExpert;
 
 TYPE

@@ -70,8 +70,8 @@ begin
 
   Success := AddClipboardFormatListener(FHandle);
   DebugLog('TClipboardListener.Create: AddClipboardFormatListener=' + BoolToStr(Success, True));
-  if not Success then
-    DebugLog('TClipboardListener.Create: GetLastError=' + IntToStr(GetLastError));
+  if not Success
+  then DebugLog('TClipboardListener.Create: GetLastError=' + IntToStr(GetLastError));
 end;
 
 
@@ -79,11 +79,11 @@ destructor TClipboardListener.Destroy;
 begin
   DebugLog('TClipboardListener.Destroy');
   if FHandle <> 0 then
-  begin
-    RemoveClipboardFormatListener(FHandle);
-    DeallocateHWnd(FHandle);
-    FHandle := 0;
-  end;
+    begin
+      RemoveClipboardFormatListener(FHandle);
+      DeallocateHWnd(FHandle);
+      FHandle := 0;
+    end;
   inherited;
 end;
 
@@ -91,12 +91,12 @@ end;
 procedure TClipboardListener.WndProc(var Msg: TMessage);
 begin
   if Msg.Msg = WM_CLIPBOARDUPDATE then
-  begin
-    DebugLog('TClipboardListener: WM_CLIPBOARDUPDATE received');
-    if Assigned(FExpert) then
-      FExpert.ProcessClipboard;
-    Msg.Result := 0;
-  end
+    begin
+      DebugLog('TClipboardListener: WM_CLIPBOARDUPDATE received');
+      if Assigned(FExpert)
+      then FExpert.ProcessClipboard;
+      Msg.Result := 0;
+    end
   else
     Msg.Result := DefWindowProc(FHandle, Msg.Msg, Msg.WParam, Msg.LParam);
 end;
@@ -105,10 +105,10 @@ end;
 procedure InitClipboardListener(aExpert: TFileFromClipboard);
 begin
   if FClipboardListener = nil then
-  begin
-    DebugLog('InitClipboardListener: Creating');
-    FClipboardListener := TClipboardListener.Create;
-  end;
+    begin
+      DebugLog('InitClipboardListener: Creating');
+      FClipboardListener := TClipboardListener.Create;
+    end;
   FClipboardListener.Expert := aExpert;
 end;
 

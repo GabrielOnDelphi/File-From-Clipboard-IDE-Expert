@@ -21,7 +21,6 @@ TYPE
   TFileFromClipboard = class(TInterfacedObject, IOTAWizard, IOTAIDENotifier)
   private
     FLastClipboardText: string;
-    FNotifierIndex: Integer;
     FMenuItem: TMenuItem;
     procedure LoadSettings;
     function  TryExtractUnitName(const Path: string): string;
@@ -81,7 +80,6 @@ begin
 
   ExcludeFolders:= TStringList.Create;
   ExcludeFolders.Delimiter:= ';';   // necessary for DelimitedText only, not for CommaText
-  FNotifierIndex:= -1;
   FMenuItem:= nil;
   Enabled:= True;
   DontOpenTwice:= FALSE;
@@ -189,7 +187,7 @@ begin
 
   DebugLog('ProcessClipboard: ClipboardText length=' + IntToStr(Length(ClipboardText)));
   DebugLog('ProcessClipboard: First 200 chars: ' + Copy(ClipboardText, 1, 200));
-  Log('ProcessClipboard: '+ UnitName);
+  Log('ProcessClipboard');
   Log('  First 512 chars: '+ Copy(ClipboardText, 1, 512));
 
   // Don't open twice
@@ -203,21 +201,16 @@ begin
     for i:= 0 to Lines.Count - 1 do
     begin
       Line:= Trim(Lines[I]);
-      if Line = '' then Continue;   
-      if Line = '' then
-        begin
-          Log('  Line is empty. Continue.');
-          Continue;
-         end;
-		 	  
+      if Line = '' then Continue;
+
       if Pos('.', Line) < 1 then
       begin
-        Log('  Text in clipbboard: Not a file.');
+        Log('  Text in clipboard: Not a file.');
         Continue;
       end;
 
-      // Replace / with \ to handle Linux-style paths
-      Line:= StringReplace(Line, '/', '\', [rfReplaceAll]);    //Some platforms (like sonarcube) uses "Linux" paths, which will give this error: "Invalid characters in search pattern". Example:  MyProjects/Vcl.MyFile.pas
+      // Replace / with \ to handle Linux-style paths (SonarQube uses Linux paths)
+      Line:= StringReplace(Line, '/', '\', [rfReplaceAll]);
 
       // Handle full paths or unit names (e.g., c:\path\file.pas or MyBase.MyUnit.pas)
       UnitName:= TryExtractUnitName(Line);
@@ -226,20 +219,18 @@ begin
 
       if NOT IsDelphiFile(FileName) then
         begin
-          Log('  Text in clipbboard: Not a Dephi file: '+ FileName);
+          Log('  Text in clipboard: Not a Delphi file: '+ FileName);
           Continue;
         end;
 
-      // Check for exclusion before opening
-      if IsFileExcluded(FullPath) then
-        begin
-          Continue; // Skip this path and go to the next line in the clipboard
-        end;
-
-      // Restore full file name
+      // Resolve full file path
       if TFile.Exists(Line)
       then FullPath := Line
       else FullPath := SearchFileInPath(FileName);
+
+      // Check for exclusion (must be AFTER FullPath is assigned)
+      if IsFileExcluded(FullPath) then
+        Continue;
 
       if FullPath <> '' then
       begin
@@ -407,38 +398,9 @@ end;
 
 
 {-------------------------------------------------------------------------------------------------------------
-   UTILS / SETTINGS
+   SETTINGS
+   INI file is located in: %APPDATA%\FileFromClipboard\FileFromClipboard.ini
 -------------------------------------------------------------------------------------------------------------}
-function IsDelphiFile(const FileName: string): Boolean;
-var Ext: string;
-begin
-  Ext := LowerCase(ExtractFileExt(FileName));
-  Result := (Ext = '.pas') or (Ext = '.dfm') or (Ext = '.dpr')
-         or (Ext = '.dpk') or (Ext = '.inc') or (Ext = '.dproj');
-end;
-
-
-function AppDataFolder(AppName: string; ForceDir: Boolean = FALSE): string;
-begin
-  Assert(AppName > '', 'AppName is empty!');
-  Assert(System.IOUtils.TPath.HasValidFileNameChars(AppName, FALSE), 'Invalid chars in AppName: '+ AppName);
-
-  Result := IncludeTrailingPathDelimiter(TPath.Combine(TPath.GetHomePath, AppName));
-
-  if ForceDir
-  then ForceDirectories(Result);
-end;
-
-
-function GetIniPath: string;
-begin
-  Result:= AppDataFolder('FileFromClipboard', TRUE) + 'FileFromClipboard.ini';
-end;
-
-
-
-
-{ INI file is located in c:\Users\USERNAME\AppData\Roaming\FileFromClipboard\FileFromClipboard.ini }
 procedure TFileFromClipboard.LoadSettings;
 var
   Ini: TIniFile;

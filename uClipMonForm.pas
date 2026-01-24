@@ -21,18 +21,19 @@ TYPE
   TClipMonFrm = class(TForm)
     btnApply: TButton;
     btnCancel: TButton;
-    chkActivateLog: TCheckBox;
     chkEnable: TCheckBox;
     edtExcluded: TLabeledEdit;
     edtSearchPath: TLabeledEdit;
     Log: TMemo;
     PageControl1: TPageControl;
     Panel2: TPanel;
-    TabSheet1: TTabSheet;
+    tabLog: TTabSheet;
     TabSheet2: TTabSheet;
+    chkActivateLog: TCheckBox;
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure btnApplyClick(Sender: TObject);
     procedure btnCancelClick(Sender: TObject);
+    procedure chkActivateLogClick(Sender: TObject);
   private
     procedure SaveFormPos;
     procedure LoadFormPos;
@@ -106,6 +107,12 @@ begin
 end;
 
 
+procedure TClipMonFrm.chkActivateLogClick(Sender: TObject);
+begin
+  Expert.LogActive    := chkActivateLog.Checked;
+end;
+
+
 procedure TClipMonFrm.SaveFormPos;
 var Ini: TIniFile;
 begin
@@ -130,6 +137,8 @@ begin
     Ini.Free;
   end;
 end;
+
+
 
 
 initialization

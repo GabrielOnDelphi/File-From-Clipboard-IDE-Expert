@@ -126,6 +126,12 @@ begin
   DebugLog('TFileFromClipboard.Destroy: START');
   SaveSettings;
 
+  // CRITICAL: Free the clipboard listener NOW, not in finalization!
+  // During package reinstall, the old AllocateHWnd window survives but its WndProc
+  // code gets unloaded. If we don't free it here, the orphan window receives
+  // WM_CLIPBOARDUPDATE and tries to execute unloaded code → CRASH.
+  FreeClipboardListener;
+
   // Do NOT free MonitorForm - it's a singleton that must persist for IDE lifetime
   // The form will be freed in the finalization section
   MonitorForm := nil;
@@ -154,17 +160,20 @@ var
   Lines: TStringList;
   I: Integer;
 begin
+  DebugLog('ProcessClipboard: START');
   if NOT Enabled then
     begin
       Log('Expert disabled!');
+      DebugLog('ProcessClipboard: Expert disabled');
       Exit;
     end;
 
-  // Read clipboard
+  // Read clipboard - check for both ANSI and Unicode text formats
   Log('');
-  if NOT Clipboard.HasFormat(CF_TEXT) then
+  if NOT (Clipboard.HasFormat(CF_TEXT) OR Clipboard.HasFormat(CF_UNICODETEXT)) then
     begin
       Log('The clipboard is not text!');
+      DebugLog('ProcessClipboard: Clipboard is not text (no CF_TEXT or CF_UNICODETEXT)');
       Exit;
     end;
   try
@@ -173,10 +182,13 @@ begin
     on E: EClipboardException do
       begin
         Log('Expert.EClipboardException!');
+        DebugLog('ProcessClipboard: EClipboardException - ' + E.Message);
         Exit;                          // Silently handle access denied or other clipboard errors like "Cannot open clipboard: Access is denied"
       end;
   end;
 
+  DebugLog('ProcessClipboard: ClipboardText length=' + IntToStr(Length(ClipboardText)));
+  DebugLog('ProcessClipboard: First 200 chars: ' + Copy(ClipboardText, 1, 200));
   Log('ProcessClipboard: '+ UnitName);
   Log('  First 512 chars: '+ Copy(ClipboardText, 1, 512));
 

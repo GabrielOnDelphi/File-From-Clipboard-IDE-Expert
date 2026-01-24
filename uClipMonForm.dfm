@@ -5,7 +5,7 @@ object ClipMonFrm: TClipMonFrm
   AlphaBlendValue = 240
   BorderIcons = [biSystemMenu, biMinimize]
   Caption = 'Monitor'
-  ClientHeight = 243
+  ClientHeight = 345
   ClientWidth = 384
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -22,7 +22,7 @@ object ClipMonFrm: TClipMonFrm
   TextHeight = 15
   object Panel2: TPanel
     Left = 0
-    Top = 210
+    Top = 312
     Width = 384
     Height = 33
     Align = alBottom
@@ -61,30 +61,16 @@ object ClipMonFrm: TClipMonFrm
     Left = 0
     Top = 0
     Width = 384
-    Height = 210
+    Height = 312
     ActivePage = TabSheet2
     Align = alClient
     TabOrder = 1
-    object TabSheet1: TTabSheet
-      Caption = 'Log'
-      object Log: TMemo
-        AlignWithMargins = True
-        Left = 3
-        Top = 3
-        Width = 370
-        Height = 174
-        Align = alClient
-        ScrollBars = ssVertical
-        TabOrder = 0
-        WordWrap = False
-      end
-    end
     object TabSheet2: TTabSheet
       Caption = 'Settings'
       ImageIndex = 1
       DesignSize = (
         376
-        180)
+        282)
       object chkEnable: TCheckBox
         Left = 15
         Top = 15
@@ -95,16 +81,6 @@ object ClipMonFrm: TClipMonFrm
         Checked = True
         State = cbChecked
         TabOrder = 0
-      end
-      object chkActivateLog: TCheckBox
-        Left = 235
-        Top = 14
-        Width = 106
-        Height = 16
-        Caption = 'Activate log'
-        Checked = True
-        State = cbChecked
-        TabOrder = 1
       end
       object edtSearchPath: TLabeledEdit
         Left = 15
@@ -118,7 +94,7 @@ object ClipMonFrm: TClipMonFrm
         EditLabel.Width = 62
         EditLabel.Height = 15
         EditLabel.Caption = 'Search path'
-        TabOrder = 2
+        TabOrder = 1
         Text = ''
         TextHint = 'C:\MyProjects'
       end
@@ -134,9 +110,35 @@ object ClipMonFrm: TClipMonFrm
         EditLabel.Width = 87
         EditLabel.Height = 15
         EditLabel.Caption = 'Excluded folders'
-        TabOrder = 3
+        TabOrder = 2
         Text = ''
         TextHint = 'bin;C:\MyProjects\3rd_party'
+      end
+    end
+    object tabLog: TTabSheet
+      Caption = 'Log'
+      object Log: TMemo
+        AlignWithMargins = True
+        Left = 3
+        Top = 19
+        Width = 370
+        Height = 260
+        Align = alClient
+        ScrollBars = ssVertical
+        TabOrder = 0
+        WordWrap = False
+      end
+      object chkActivateLog: TCheckBox
+        Left = 0
+        Top = 0
+        Width = 376
+        Height = 16
+        Align = alTop
+        Caption = 'Activate log'
+        Checked = True
+        State = cbChecked
+        TabOrder = 1
+        OnClick = chkActivateLogClick
       end
     end
   end

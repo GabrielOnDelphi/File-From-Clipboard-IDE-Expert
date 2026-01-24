@@ -21,13 +21,12 @@ unit uClipboardListener;
    ----------------------------
    We use AllocateHWnd to create a dedicated message-only window that is independent of VCL's
    form handle management. This window:
-   - Is created once via InitClipboardListener
-   - Persists for the entire IDE session
-   - Is NOT explicitly destroyed (Windows cleans up when IDE closes)
+   - Is created via InitClipboardListener when the wizard starts
+   - Is destroyed via FreeClipboardListener when the wizard is destroyed
    - Receives WM_CLIPBOARDUPDATE messages reliably
 
-   Note: We intentionally don't call DeallocateHWnd during finalization because VCL is
-   partially destroyed at that point and the window message handling causes crashes.
+   Note: We free the clipboard listener in the wizard's destructor, NOT in finalization.
+   During finalization, VCL is partially destroyed and DeallocateHWnd causes crashes.
 =============================================================================================================}
 
 INTERFACE

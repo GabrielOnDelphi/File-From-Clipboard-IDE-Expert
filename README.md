@@ -15,7 +15,7 @@ Star this project if you want to see future updates and enhancements.
 
 1. Double click the DPK file to load the package in the IDE.  
 2. In the Project Manager, right-click the package.  
-3. Choose “Install”.
+3. Choose "Install".
 
 This IDE expert has 1 dependency:  
 https://github.com/GabrielOnDelphi/Delphi-LightSaber/blob/main/IDE%20Experts/uOpenFileIDE.pas
@@ -36,7 +36,7 @@ After installation the expert will appear in the IDE menus.
   - Verify the file extension is .pas (case-insensitive).  
 
 ## Feedback
-If you find this tool useful, please star the repository — it helps prioritize future updates.  
+If you find this tool useful, please star the repository - it helps prioritize future updates.  
 
 ![Screenshot](GitScreenshot.png "Setup")  
 

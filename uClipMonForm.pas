@@ -15,7 +15,7 @@ INTERFACE
 USES
   Winapi.Windows, System.SysUtils, System.Classes, System.IniFiles,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls,
-  uClipMonExpert;
+  uClipMonExpert, Vcl.Mask;
 
 TYPE
   TClipMonFrm = class(TForm)

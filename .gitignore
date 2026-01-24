@@ -1,10 +1,13 @@
 /23.0
 /37.0
 /__history
+/__recovery
 /Version that I tried to split
 *.dsv
 *.res
 *.local
 *.~dsk
 *.dsk
+crash
+Tasks.txt
 CLAUDE.md

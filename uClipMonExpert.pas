@@ -67,8 +67,9 @@ USES uUtils, uClipMonForm, uClipboardListener;
 -------------------------------------------------------------------------------------------------------------}
 procedure TFileFromClipboard.Log(const Msg: string);
 begin
-  if LogActive and Assigned(MonitorForm) then
-    (MonitorForm as TClipMonFrm).Log.Lines.Add(Msg);
+  if Assigned(MonitorForm)
+  and LogActive
+  then (MonitorForm as TClipMonFrm).Log.Lines.Add(Msg);
 end;
 
 

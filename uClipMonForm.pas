@@ -2,7 +2,7 @@ unit uClipMonForm;
 
 {=============================================================================================================
    www.GabrielMoraru.com
-   2024
+   2026.01.30
    Github.com/GabrielOnDelphi/Delphi-LightSaber/blob/main/System/Copyright.txt
 --------------------------------------------------------------------------------------------------------------
    Settings form for the File From Clipboard IDE expert.
@@ -14,7 +14,7 @@ INTERFACE
 
 USES
   Winapi.Windows, System.SysUtils, System.Classes, System.IniFiles,
-  Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls,
+  Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.Samples.Spin,
   uClipMonExpert, Vcl.Mask;
 
 TYPE
@@ -30,6 +30,9 @@ TYPE
     tabLog: TTabSheet;
     TabSheet2: TTabSheet;
     chkActivateLog: TCheckBox;
+    spnMaxLines: TSpinEdit;
+    lblMaxLines: TLabel;
+    chkBeepOnOpen: TCheckBox;
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure btnApplyClick(Sender: TObject);
     procedure btnCancelClick(Sender: TObject);
@@ -80,6 +83,8 @@ begin
   edtSearchPath.Text     := Expert.SearchPath;
   edtExcluded.Text       := Expert.ExcludeFolders.DelimitedText;
   chkActivateLog.Checked := Expert.LogActive;
+  spnMaxLines.Value      := Expert.MaxLinesToSearch;
+  chkBeepOnOpen.Checked  := Expert.BeepOnOpen;
 end;
 
 
@@ -92,10 +97,12 @@ end;
 
 procedure TClipMonFrm.btnApplyClick(Sender: TObject);
 begin
-  Expert.Enabled      := chkEnable.Checked;
-  Expert.SearchPath   := edtSearchPath.Text;
+  Expert.Enabled         := chkEnable.Checked;
+  Expert.SearchPath      := edtSearchPath.Text;
   Expert.ExcludeFolders.DelimitedText := edtExcluded.Text;
-  Expert.LogActive    := chkActivateLog.Checked;
+  Expert.LogActive       := chkActivateLog.Checked;
+  Expert.MaxLinesToSearch:= spnMaxLines.Value;
+  Expert.BeepOnOpen      := chkBeepOnOpen.Checked;
   Expert.SaveSettings;
   Close;
 end;

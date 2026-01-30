@@ -2,17 +2,18 @@
 
 {=============================================================================================================
    www.GabrielMoraru.com
-   2024
+   2026.01.30
    Github.com/GabrielOnDelphi/Delphi-LightSaber/blob/main/System/Copyright.txt
 --------------------------------------------------------------------------------------------------------------
-   This IDE wizzard detects when a PAS file (full or partial path) appears into the clipboard.
-   Is the file is found in a certain folder (provided by the user via an INI file) it opens that file in the IDE.
+   This IDE wizard detects when a PAS file (full or partial path) appears into the clipboard.
+   If the file is found in a certain folder (provided by the user via an INI file) it opens that file in the IDE.
 =============================================================================================================}
 
 INTERFACE
 
 USES
-  Winapi.Windows, System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.Types,
+  Winapi.Windows, Winapi.MMSystem,
+  System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.Types, System.Math,
   Vcl.Dialogs, Vcl.Clipbrd, Vcl.Menus, Vcl.Forms,
   ToolsAPI,
   uOpenFileIDE {this file can be found here: Github.com/GabrielOnDelphi/Delphi-LightSaber/tree/main/IDE%20Experts };
@@ -35,6 +36,8 @@ TYPE
     ExcludeFolders: TStringList;
     SearchPath: string;
     DontOpenTwice: Boolean;
+    MaxLinesToSearch: Integer;  // How many lines from clipboard to search (default 1)
+    BeepOnOpen: Boolean;        // Play sound when opening a file
     constructor Create;
     destructor Destroy; override;
     procedure ProcessClipboard; // Called by TClipMonFrm.WMClipboardUpdate
@@ -84,6 +87,8 @@ begin
   FMenuItem:= nil;
   Enabled:= True;
   DontOpenTwice:= FALSE;
+  MaxLinesToSearch:= 1;
+  BeepOnOpen:= True;
 
   LoadSettings;
 
@@ -192,14 +197,15 @@ begin
   Log('  First 512 chars: '+ Copy(ClipboardText, 1, 512));
 
   // Don't open twice
-  if DontOpenTwice then
-    if ClipboardText = FLastClipboardText then Exit;
+  if DontOpenTwice
+  then if ClipboardText = FLastClipboardText then Exit;
   FLastClipboardText:= ClipboardText;
 
   Lines:= TStringList.Create;
   try
     Lines.Text:= ClipboardText;
-    for i:= 0 to Lines.Count - 1 do
+    // Only search the first MaxLinesToSearch lines (user configurable, default 1)
+    for i:= 0 to Min(Lines.Count - 1, MaxLinesToSearch - 1) do
     begin
       Line:= Trim(Lines[I]);
       if Line = '' then Continue;
@@ -239,9 +245,18 @@ begin
         TThread.Queue(nil,
           procedure
           begin
-            VAR IDEPosition: RIDEPosition;
-            IDEPosition.default(FullPath);
-            OpenInIDEEditor(IDEPosition);
+            // Check if file is already open - if so, just switch to it without changing cursor
+            if NOT SwitchToOpenFile(FullPath) then
+              begin
+                // File not already open, open it
+                VAR IDEPosition: RIDEPosition;
+                IDEPosition.default(FullPath);
+                OpenInIDEEditor(IDEPosition);
+              end;
+
+            // Beep to notify user that file was opened/switched
+            if BeepOnOpen
+            then PlaySound('SystemAsterisk', 0, SND_ALIAS or SND_ASYNC);
           end);
 
         Break; // Found the file, break the loop
@@ -363,7 +378,10 @@ end;
 
 function TFileFromClipboard.GetState: TWizardState;
 begin
-  Result:= [wsEnabled];  //todo: use this instead of Enabled!
+  // Return wsEnabled based on the Enabled setting so IDE reflects the wizard state
+  if Enabled
+  then Result:= [wsEnabled]
+  else Result:= [];
 end;
 
 procedure TFileFromClipboard.AfterSave;
@@ -422,6 +440,8 @@ begin
     // Plugin
     Enabled  := Ini.ReadBool('ExpertSettings', 'Enabled', True);
     LogActive:= Ini.ReadBool('ExpertSettings', 'LogActive', False);
+    MaxLinesToSearch:= Ini.ReadInteger('ExpertSettings', 'MaxLinesToSearch', 1);
+    BeepOnOpen:= Ini.ReadBool('ExpertSettings', 'BeepOnOpen', True);
   finally
     Ini.Free;
   end;
@@ -437,10 +457,12 @@ begin
   Log('Expert.SaveSettings - IniPath: '+ IniPath);
   Ini:= TIniFile.Create(IniPath);
   try
-    Ini.WriteString('ExpertSettings', 'SearchPath', SearchPath);
-    Ini.WriteString('ExpertSettings', 'ExcludeFolders', ExcludeFolders.DelimitedText);
-    Ini.WriteBool  ('ExpertSettings', 'Enabled', Enabled);
-    Ini.WriteBool  ('ExpertSettings', 'LogActive', LogActive);
+    Ini.WriteString ('ExpertSettings', 'SearchPath', SearchPath);
+    Ini.WriteString ('ExpertSettings', 'ExcludeFolders', ExcludeFolders.DelimitedText);
+    Ini.WriteBool   ('ExpertSettings', 'Enabled', Enabled);
+    Ini.WriteBool   ('ExpertSettings', 'LogActive', LogActive);
+    Ini.WriteInteger('ExpertSettings', 'MaxLinesToSearch', MaxLinesToSearch);
+    Ini.WriteBool   ('ExpertSettings', 'BeepOnOpen', BeepOnOpen);
   finally
     Ini.Free;
   end;

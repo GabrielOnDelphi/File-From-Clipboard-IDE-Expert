@@ -103,7 +103,7 @@ object ClipMonFrm: TClipMonFrm
         Top = 122
         Width = 342
         Height = 23
-        Hint = 
+        Hint =
           'Files found in these folders will not be open in the IDE.'#13#10'Multi' +
           'ple paths allowed.'
         Anchors = [akLeft, akTop, akRight]
@@ -113,6 +113,38 @@ object ClipMonFrm: TClipMonFrm
         TabOrder = 2
         Text = ''
         TextHint = 'bin;C:\MyProjects\3rd_party'
+      end
+      object lblMaxLines: TLabel
+        Left = 15
+        Top = 165
+        Width = 135
+        Height = 15
+        Caption = 'Max lines to search'
+        FocusControl = spnMaxLines
+      end
+      object spnMaxLines: TSpinEdit
+        Left = 15
+        Top = 183
+        Width = 60
+        Height = 24
+        Hint =
+          'Only search the first N lines of clipboard text for filenames (d' +
+          'efault: 1)'
+        MaxValue = 100
+        MinValue = 1
+        TabOrder = 3
+        Value = 1
+      end
+      object chkBeepOnOpen: TCheckBox
+        Left = 15
+        Top = 220
+        Width = 200
+        Height = 17
+        Hint = 'Play a sound when a file is opened or switched to'
+        Caption = 'Beep when opening file'
+        Checked = True
+        State = cbChecked
+        TabOrder = 4
       end
     end
     object tabLog: TTabSheet

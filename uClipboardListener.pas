@@ -90,15 +90,16 @@ end;
 
 procedure TClipboardListener.WndProc(var Msg: TMessage);
 begin
-  if Msg.Msg = WM_CLIPBOARDUPDATE then
+  if Msg.Msg = WM_CLIPBOARDUPDATE
+  then
     begin
       DebugLog('TClipboardListener: WM_CLIPBOARDUPDATE received');
       if Assigned(FExpert)
       then FExpert.ProcessClipboard;
-      Msg.Result := 0;
+      Msg.Result:= 0;
     end
   else
-    Msg.Result := DefWindowProc(FHandle, Msg.Msg, Msg.WParam, Msg.LParam);
+    Msg.Result:= DefWindowProc(FHandle, Msg.Msg, Msg.WParam, Msg.LParam);
 end;
 
 
@@ -107,9 +108,9 @@ begin
   if FClipboardListener = nil then
     begin
       DebugLog('InitClipboardListener: Creating');
-      FClipboardListener := TClipboardListener.Create;
+      FClipboardListener:= TClipboardListener.Create;
     end;
-  FClipboardListener.Expert := aExpert;
+  FClipboardListener.Expert:= aExpert;
 end;
 
 

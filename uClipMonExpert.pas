@@ -7,6 +7,13 @@
 --------------------------------------------------------------------------------------------------------------
    This IDE wizard detects when a PAS file (full or partial path) appears into the clipboard.
    If the file is found in a certain folder (provided by the user via an INI file) it opens that file in the IDE.
+
+   CODE LINE JUMPING
+   After opening/switching to a unit, the expert enters "waiting for code line" mode.
+   If the next clipboard text matches a line of code in that unit, it jumps to that line.
+   If the clipboard text doesn't match any line, it exits the mode and resumes
+   normal unit-name matching. This supports the workflow of copying a unit name
+   from an external tool (GitHub, SonarQube) followed by copying a line of code to jump to.
 =============================================================================================================}
 
 INTERFACE
@@ -22,9 +29,12 @@ TYPE
   TFileFromClipboard = class(TInterfacedObject, IOTAWizard, IOTAIDENotifier)
   private
     FLastClipboardText: string;
+    FLastOpenedFile: string;       // Full path of the last unit we opened/switched to
+    FWaitingForCodeLine: Boolean;  // True = next clipboard might be a code line to jump to
     FMenuItem: TMenuItem;
     procedure LoadSettings;
     function  TryExtractUnitName(const Path: string): string;
+    function  TryJumpToCodeLine(const ClipText: string): Boolean;
     function  SearchFileInPath(const FileName: string): string;
     function  IsFileExcluded(const FullPath: string): Boolean;
     procedure Log(const Msg: string);
@@ -89,6 +99,8 @@ begin
   DontOpenTwice:= FALSE;
   MaxLinesToSearch:= 1;
   BeepOnOpen:= True;
+  FLastOpenedFile:= '';
+  FWaitingForCodeLine:= False;
 
   LoadSettings;
 
@@ -157,6 +169,57 @@ begin
 end;
 
 
+{ Checks if ClipText is a line of code in FLastOpenedFile.
+  If found, jumps to that line and returns True (stay in waiting state).
+  If not found, returns False (caller should exit waiting state). }
+function TFileFromClipboard.TryJumpToCodeLine(const ClipText: string): Boolean;
+var
+  Lines: TStringList;
+  SearchLine: string;
+  LineNum, i: Integer;
+begin
+  Result:= False;
+  if FLastOpenedFile = '' then Exit;
+
+  // Extract first non-empty line from clipboard
+  Lines:= TStringList.Create;
+  try
+    Lines.Text:= ClipText;
+    SearchLine:= '';
+    for i:= 0 to Lines.Count - 1 do
+    begin
+      SearchLine:= Trim(Lines[i]);
+      if SearchLine <> '' then Break;
+    end;
+  finally
+    FreeAndNil(Lines);
+  end;
+
+  if SearchLine = '' then Exit;
+
+  // Search for this line in the last opened file
+  LineNum:= FindLineInFile(FLastOpenedFile, SearchLine);
+  if LineNum < 0 then
+  begin
+    Log('  Code line not found in ' + ExtractFileName(FLastOpenedFile) + ': ' + Copy(SearchLine, 1, 80));
+    Exit;
+  end;
+
+  Log('  Jumping to line ' + IntToStr(LineNum) + ' in ' + ExtractFileName(FLastOpenedFile));
+  DebugLog('TryJumpToCodeLine: Found at line ' + IntToStr(LineNum));
+
+  TThread.Queue(nil,
+    procedure
+    begin
+      GotoLineInOpenFile(FLastOpenedFile, LineNum);
+      if BeepOnOpen
+      then PlaySound('SystemAsterisk', 0, SND_ALIAS or SND_ASYNC);
+    end);
+
+  Result:= True;
+end;
+
+
 // Why is this called twice?
 procedure TFileFromClipboard.ProcessClipboard;
 var
@@ -201,6 +264,16 @@ begin
   then if ClipboardText = FLastClipboardText then Exit;
   FLastClipboardText:= ClipboardText;
 
+  // STATE: If we recently opened a unit, check if the clipboard is a code line in that unit
+  if FWaitingForCodeLine then
+  begin
+    if TryJumpToCodeLine(ClipboardText)
+    then Exit;  // Successfully jumped to the line, stay in waiting state
+    // Not a code line in the unit - exit waiting state, fall through to unit matching
+    FWaitingForCodeLine:= False;
+    Log('  Code-line matching deactivated. Resuming unit matching.');
+  end;
+
   Lines:= TStringList.Create;
   try
     Lines.Text:= ClipboardText;
@@ -241,6 +314,11 @@ begin
 
       if FullPath <> '' then
       begin
+        // Enter "waiting for code line" state: next clipboard might be a line to jump to
+        FLastOpenedFile:= FullPath;
+        FWaitingForCodeLine:= True;
+        Log('  Code-line matching active for: ' + ExtractFileName(FullPath));
+
         // CRITICAL: Schedule the OTA call (OpenFileInIDE) to run later when the IDE's main message loop is idle.
         TThread.Queue(nil,
           procedure

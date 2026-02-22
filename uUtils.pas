@@ -22,6 +22,10 @@ function AppDataFolder(AppName: string; ForceDir: Boolean = FALSE): string;
 function GetIniPath: string;
 procedure DebugLog(const Msg: string);
 
+{ Searches a file on disk for a line whose trimmed content matches SearchText.
+  Returns 1-based line number, or -1 if not found. }
+function FindLineInFile(const FileName, SearchText: string): Integer;
+
 
 implementation
 
@@ -73,6 +77,32 @@ begin
     end;
   except
     // Silently ignore logging errors
+  end;
+end;
+
+
+
+{ Searches a file on disk for a line whose trimmed content matches SearchText.
+  Returns 1-based line number, or -1 if not found. }
+function FindLineInFile(const FileName, SearchText: string): Integer;
+var
+  Lines: TStringList;
+  TrimmedSearch: string;
+  i: Integer;
+begin
+  Result:= -1;
+  TrimmedSearch:= Trim(SearchText);
+  if TrimmedSearch = '' then Exit;
+  if NOT FileExists(FileName) then Exit;
+
+  Lines:= TStringList.Create;
+  try
+    Lines.LoadFromFile(FileName);
+    for i:= 0 to Lines.Count - 1 do
+      if Trim(Lines[i]) = TrimmedSearch
+      then EXIT(i + 1);  // 1-based line number
+  finally
+    FreeAndNil(Lines);
   end;
 end;
 

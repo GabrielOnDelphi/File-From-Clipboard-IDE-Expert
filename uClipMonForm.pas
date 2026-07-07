@@ -2,7 +2,7 @@ unit uClipMonForm;
 
 {=============================================================================================================
    www.GabrielMoraru.com
-   2026.01.30
+   2026.07.06
    Github.com/GabrielOnDelphi/Delphi-LightSaber/blob/main/System/Copyright.txt
 --------------------------------------------------------------------------------------------------------------
    Settings form for the File From Clipboard IDE expert.
@@ -44,6 +44,8 @@ TYPE
     Expert: TFileFromClipboard;
   public
     procedure SetExpert(aExpert: TFileFromClipboard);
+    procedure DetachExpert(aExpert: TFileFromClipboard);        // Clears Expert, but only if it still points to aExpert
+    function  BoundTo(aExpert: TFileFromClipboard): Boolean;    // True if this form is currently bound to aExpert
   end;
 
 function ClipMonForm: TClipMonFrm;
@@ -88,6 +90,25 @@ begin
 end;
 
 
+{ Called from the wizard's destructor. The IDE creates/destroys several wizard instances
+  during startup; this form is a session-long singleton, so a destroyed wizard must remove
+  its (now dangling) pointer - but only if a newer instance has not already taken over. }
+procedure TClipMonFrm.DetachExpert(aExpert: TFileFromClipboard);
+begin
+  if Expert = aExpert then
+    begin
+      DebugLog('TClipMonFrm.DetachExpert');
+      Expert := nil;
+    end;
+end;
+
+
+function TClipMonFrm.BoundTo(aExpert: TFileFromClipboard): Boolean;
+begin
+  Result := (Expert = aExpert) and (aExpert <> nil);
+end;
+
+
 procedure TClipMonFrm.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
   SaveFormPos;
@@ -97,6 +118,12 @@ end;
 
 procedure TClipMonFrm.btnApplyClick(Sender: TObject);
 begin
+  if Expert = nil then    // The wizard that was bound to this form is already destroyed
+    begin
+      Close;
+      EXIT;
+    end;
+
   Expert.Enabled         := chkEnable.Checked;
   Expert.SearchPath      := edtSearchPath.Text;
   Expert.ExcludeFolders.DelimitedText := edtExcluded.Text;
@@ -116,7 +143,8 @@ end;
 
 procedure TClipMonFrm.chkActivateLogClick(Sender: TObject);
 begin
-  Expert.LogActive    := chkActivateLog.Checked;
+  if Expert = nil then EXIT;   // The wizard that was bound to this form is already destroyed
+  Expert.LogActive := chkActivateLog.Checked;
 end;
 
 

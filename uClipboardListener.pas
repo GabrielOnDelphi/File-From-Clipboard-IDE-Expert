@@ -2,7 +2,7 @@ unit uClipboardListener;
 
 {=============================================================================================================
    www.GabrielMoraru.com
-   2024
+   2026.07.06
    Github.com/GabrielOnDelphi/Delphi-LightSaber/blob/main/System/Copyright.txt
 --------------------------------------------------------------------------------------------------------------
    CLIPBOARD MONITORING
@@ -22,7 +22,9 @@ unit uClipboardListener;
    We use AllocateHWnd to create a dedicated message-only window that is independent of VCL's
    form handle management. This window:
    - Is created via InitClipboardListener when the wizard starts
-   - Is destroyed via FreeClipboardListener when the wizard is destroyed
+   - Is destroyed via FreeClipboardListener when the wizard IT SERVES is destroyed.
+     (The IDE creates several wizard instances during startup. An older instance must not
+     free the listener that a newer instance is using - see FreeClipboardListener.)
    - Receives WM_CLIPBOARDUPDATE messages reliably
 
    Note: We free the clipboard listener in the wizard's destructor, NOT in finalization.
@@ -49,7 +51,7 @@ type
   end;
 
 procedure InitClipboardListener(aExpert: TFileFromClipboard);
-procedure FreeClipboardListener;
+procedure FreeClipboardListener(aExpert: TFileFromClipboard);
 
 IMPLEMENTATION
 
@@ -94,8 +96,14 @@ begin
   then
     begin
       DebugLog('TClipboardListener: WM_CLIPBOARDUPDATE received');
-      if Assigned(FExpert)
-      then FExpert.ProcessClipboard;
+      if Assigned(FExpert) then
+        try
+          FExpert.ProcessClipboard;
+        except
+          // A plugin must never let an exception escape into the IDE's message dispatch:
+          // the IDE would show an error dialog on every clipboard change. Log it instead of re-raising.
+          on E: Exception do DebugLog('TClipboardListener.WndProc: ' + E.ClassName + ': ' + E.Message);
+        end;
       Msg.Result:= 0;
     end
   else
@@ -114,8 +122,18 @@ begin
 end;
 
 
-procedure FreeClipboardListener;
+{ Frees the listener, but ONLY if aExpert is the instance it currently serves.
+  The IDE creates several wizard instances during startup (Register is called multiple times)
+  and destroys some of them later. Without this guard, the destructor of an OLD instance
+  would kill the listener that a NEWER instance is using, silently ending clipboard
+  monitoring for the rest of the IDE session. }
+procedure FreeClipboardListener(aExpert: TFileFromClipboard);
 begin
+  if (FClipboardListener <> nil) and (FClipboardListener.Expert <> aExpert) then
+    begin
+      DebugLog('FreeClipboardListener: skipped - the listener now serves a newer wizard instance');
+      EXIT;
+    end;
   DebugLog('FreeClipboardListener');
   FreeAndNil(FClipboardListener);
 end;

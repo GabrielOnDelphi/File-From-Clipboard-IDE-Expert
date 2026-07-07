@@ -32,7 +32,9 @@
 
 requires
   designide,
-  rtl;
+  rtl,
+  vcl,
+  VclSmp;  // Vcl.Samples.Spin (TSpinEdit on the settings form); without it: W1033 implicit import
 
 contains
   uClipMonExpert in 'uClipMonExpert.pas',

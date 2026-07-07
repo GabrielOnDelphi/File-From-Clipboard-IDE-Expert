@@ -2,7 +2,7 @@
 
 {=============================================================================================================
    www.GabrielMoraru.com
-   2026.01.30
+   2026.07.07
    Github.com/GabrielOnDelphi/Delphi-LightSaber/blob/main/System/Copyright.txt
 --------------------------------------------------------------------------------------------------------------
    This IDE wizard detects when a PAS file (full or partial path) appears into the clipboard.
@@ -28,10 +28,8 @@ USES
 TYPE
   TFileFromClipboard = class(TInterfacedObject, IOTAWizard, IOTAIDENotifier)
   private
-    FLastClipboardText: string;
     FLastOpenedFile: string;       // Full path of the last unit we opened/switched to
     FWaitingForCodeLine: Boolean;  // True = next clipboard might be a code line to jump to
-    FMenuItem: TMenuItem;
     procedure LoadSettings;
     function  TryExtractUnitName(const Path: string): string;
     function  TryJumpToCodeLine(const ClipText: string): Boolean;
@@ -45,7 +43,6 @@ TYPE
     LogActive: Boolean;
     ExcludeFolders: TStringList;
     SearchPath: string;
-    DontOpenTwice: Boolean;
     MaxLinesToSearch: Integer;  // How many lines from clipboard to search (default 1)
     BeepOnOpen: Boolean;        // Play sound when opening a file
     constructor Create;
@@ -74,6 +71,14 @@ procedure Register;
 IMPLEMENTATION
 USES uUtils, uClipMonForm, uClipboardListener;
 
+VAR
+   { Singleton Tools-menu entry. The IDE creates several wizard instances during startup (Register is
+     called multiple times); without a singleton each instance adds its own duplicate menu item.
+     OnClick is re-pointed to the newest instance; freed only by the instance it currently serves
+     (same owner-guard pattern as FClipboardListener in uClipboardListener.pas). }
+   SharedMenuItem: TMenuItem = nil;
+   SharedMenuOwner: TFileFromClipboard = nil;
+
 
 {-------------------------------------------------------------------------------------------------------------
    CTOR
@@ -93,10 +98,9 @@ begin
   inherited Create;
 
   ExcludeFolders:= TStringList.Create;
-  ExcludeFolders.Delimiter:= ';';   // necessary for DelimitedText only, not for CommaText
-  FMenuItem:= nil;
+  ExcludeFolders.Delimiter:= ';';        // necessary for DelimitedText only, not for CommaText
+  ExcludeFolders.StrictDelimiter:= True; // Without this, DelimitedText also splits on SPACES: 'C:\Program Files\x' would become 'C:\Program' + 'Files\x'
   Enabled:= True;
-  DontOpenTwice:= FALSE;
   MaxLinesToSearch:= 1;
   BeepOnOpen:= True;
   FLastOpenedFile:= '';
@@ -116,19 +120,19 @@ begin
   Log('Expert.Constructor');
   //(MonitorForm as TClipMonFrm).Show;
 
-  // Add the menu item, using the Wizard object as the owner.
+  // Tools menu entry: create the singleton once, then re-point it to this (newest) instance,
+  // so the several wizard instances created at IDE startup never show duplicate entries.
   if Supports(BorlandIDEServices, INTAServices, NTAServices) then
   begin
-    // The wizard (which is an IOTAWizard) is the owner.
-    FMenuItem := TMenuItem.Create(Application);
-    FMenuItem.Caption := 'File From Clipboard';
-
-    // The handler is an instance method of TFormSettings, which handles its own creation/destruction.
-    FMenuItem.OnClick := ShowPluginOptions;
-
-    // 'ToolsMenu' is the correct name for the top-level Tools menu.
-    // The menu is now owned by the expert class and will be cleaned up in its destructor.
-    NTAServices.AddActionMenu('ToolsMenu', nil, FMenuItem);
+    if SharedMenuItem = nil then
+    begin
+      SharedMenuItem:= TMenuItem.Create(Application);
+      SharedMenuItem.Caption:= 'File From Clipboard';
+      // 'ToolsMenu' is the correct name for the top-level Tools menu.
+      NTAServices.AddActionMenu('ToolsMenu', nil, SharedMenuItem);
+    end;
+    SharedMenuItem.OnClick:= ShowPluginOptions;
+    SharedMenuOwner:= Self;
   end;
 
   // Initial check
@@ -140,18 +144,33 @@ end;
 destructor TFileFromClipboard.Destroy;
 begin
   DebugLog('TFileFromClipboard.Destroy: START');
-  SaveSettings;
+
+  // Save only if this instance is the one bound to the settings form (the one the user could have edited).
+  // The IDE creates several wizard instances during startup (Register is called multiple times);
+  // a stale instance destroyed later must not overwrite the INI with the old values it loaded at startup.
+  // Also guards against a partially-constructed object (constructor failed before creating the form/ExcludeFolders).
+  if (MonitorForm <> nil) and (MonitorForm as TClipMonFrm).BoundTo(Self)
+  then SaveSettings;
 
   // CRITICAL: Free the clipboard listener NOW, not in finalization!
   // During package reinstall, the old AllocateHWnd window survives but its WndProc
   // code gets unloaded. If we don't free it here, the orphan window receives
   // WM_CLIPBOARDUPDATE and tries to execute unloaded code → CRASH.
-  FreeClipboardListener;
+  // Freed only if the listener still serves THIS instance (see FreeClipboardListener).
+  FreeClipboardListener(Self);
 
   // Do NOT free MonitorForm - it's a singleton that must persist for IDE lifetime
   // The form will be freed in the finalization section
+  if MonitorForm <> nil
+  then (MonitorForm as TClipMonFrm).DetachExpert(Self);  // Otherwise the form would keep a dangling pointer to this destroyed instance
   MonitorForm := nil;
-  FreeAndNil(FMenuItem);            // Release the menu item. The IDE services might handle this, but it's safer to attempt to free it.
+  // Release the menu item only if it still serves THIS instance (same guard as FreeClipboardListener):
+  // an old instance destroyed by the IDE must not remove the menu the newest instance still uses.
+  if SharedMenuOwner = Self then
+  begin
+    FreeAndNil(SharedMenuItem);
+    SharedMenuOwner:= nil;
+  end;
   FreeAndNil(ExcludeFolders);
   DebugLog('TFileFromClipboard.Destroy: END');
 
@@ -175,8 +194,9 @@ end;
 function TFileFromClipboard.TryJumpToCodeLine(const ClipText: string): Boolean;
 var
   Lines: TStringList;
-  SearchLine: string;
+  SearchLine, TargetFile: string;
   LineNum, i: Integer;
+  DoBeep: Boolean;
 begin
   Result:= False;
   if FLastOpenedFile = '' then Exit;
@@ -208,11 +228,18 @@ begin
   Log('  Jumping to line ' + IntToStr(LineNum) + ' in ' + ExtractFileName(FLastOpenedFile));
   DebugLog('TryJumpToCodeLine: Found at line ' + IntToStr(LineNum));
 
-  TThread.Queue(nil,
+  // Capture locals, not fields: the deferred closure must not touch Self,
+  // because the IDE can destroy this wizard instance before the queued call runs.
+  TargetFile:= FLastOpenedFile;
+  DoBeep    := BeepOnOpen;
+
+  // TThread.Queue executes IMMEDIATELY when called from the main thread (verified in System.Classes).
+  // ForceQueue truly defers the OTA call until the IDE's message loop is idle.
+  TThread.ForceQueue(nil,
     procedure
     begin
-      GotoLineInOpenFile(FLastOpenedFile, LineNum);
-      if BeepOnOpen
+      if GotoLineInOpenFile(TargetFile, LineNum)
+      and DoBeep
       then PlaySound('SystemAsterisk', 0, SND_ALIAS or SND_ASYNC);
     end);
 
@@ -226,6 +253,7 @@ var
   ClipboardText, Line, FileName, FullPath, UnitName: string;
   Lines: TStringList;
   I: Integer;
+  DoBeep: Boolean;
 begin
   DebugLog('ProcessClipboard: START');
   if NOT Enabled then
@@ -258,11 +286,6 @@ begin
   DebugLog('ProcessClipboard: First 200 chars: ' + Copy(ClipboardText, 1, 200));
   Log('ProcessClipboard');
   Log('  First 512 chars: '+ Copy(ClipboardText, 1, 512));
-
-  // Don't open twice
-  if DontOpenTwice
-  then if ClipboardText = FLastClipboardText then Exit;
-  FLastClipboardText:= ClipboardText;
 
   // STATE: If we recently opened a unit, check if the clipboard is a code line in that unit
   if FWaitingForCodeLine then
@@ -319,8 +342,12 @@ begin
         FWaitingForCodeLine:= True;
         Log('  Code-line matching active for: ' + ExtractFileName(FullPath));
 
+        // Local copy: the deferred closure must not touch Self (the IDE can destroy this wizard instance before the queued call runs)
+        DoBeep:= BeepOnOpen;
+
         // CRITICAL: Schedule the OTA call (OpenFileInIDE) to run later when the IDE's main message loop is idle.
-        TThread.Queue(nil,
+        // TThread.Queue executes IMMEDIATELY when called from the main thread (verified in System.Classes), so ForceQueue is required for real deferral.
+        TThread.ForceQueue(nil,
           procedure
           begin
             // Check if file is already open - if so, just switch to it without changing cursor
@@ -333,7 +360,7 @@ begin
               end;
 
             // Beep to notify user that file was opened/switched
-            if BeepOnOpen
+            if DoBeep
             then PlaySound('SystemAsterisk', 0, SND_ALIAS or SND_ASYNC);
           end);
 
@@ -341,7 +368,7 @@ begin
       end;
     end;
   finally
-    Lines.Free;
+    FreeAndNil(Lines);
   end;
 end;
 
@@ -388,11 +415,14 @@ begin
   // Check against exclude folders
   for var ExcludePath in ExcludeFolders do
     begin
-      if ExcludePath = '' then Continue;
+      if Trim(ExcludePath) = '' then Continue;
 
       // Ensure the exclusion path is lower-cased and has a trailing path delimiter
       // for accurate subfolder matching (e.g., 'c:\tools' must match 'c:\tools\subfolder').
-      ExcludePath2:= LowerCase(IncludeTrailingPathDelimiter(ExcludePath));
+      // Trim first: with StrictDelimiter=True (see ctor) TStringList no longer trims whitespace
+      // around each delimited item, so a user-typed 'A; B' keeps the leading space on 'B',
+      // which would otherwise never match any real path.
+      ExcludePath2:= LowerCase(IncludeTrailingPathDelimiter(Trim(ExcludePath)));
 
       if Pos(ExcludePath2, LowerCase(FullPath)) > 0 then
       begin
@@ -427,8 +457,15 @@ begin
   try
     Files := TDirectory.GetFiles(SearchPath, FileName, TSearchOption.soAllDirectories);
   except
-    ShowMessage('SearchFileInPath exception');
-    Exit; // Hide exceptions like "Invalid characters in search pattern"
+    // Hide exceptions like EInOutArgumentException "Invalid characters in search pattern".
+    // No dialog here: any app copying text such as 'my"file.pas' to the clipboard would pop a modal in the IDE,
+    // and ShowMessage pumps messages (re-entrancy into ProcessClipboard). Log and bail out instead.
+    on E: Exception do
+      begin
+        Log('SearchFileInPath: ' + E.ClassName + ': ' + E.Message);
+        DebugLog('SearchFileInPath: ' + E.ClassName + ': ' + E.Message);
+        Exit;
+      end;
   end;
 
   for I := 0 to High(Files) do
@@ -551,6 +588,9 @@ end;
 // Show form
 procedure TFileFromClipboard.ShowPluginOptions(Sender: TObject);
 begin
+  // Re-bind first: the singleton form could still point to an older wizard instance
+  // that the IDE has already destroyed (Register is called multiple times at startup).
+  ClipMonForm.SetExpert(Self);
   ClipMonForm.Show;
 end;
 

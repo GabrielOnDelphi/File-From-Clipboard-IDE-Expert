@@ -13,3 +13,6 @@ Tasks.txt
 CLAUDE.md
 ReviewHistory.md
 *.dcu
+
+# Temporary files of Claude Code sessions
+Temp/
